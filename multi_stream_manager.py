@@ -211,6 +211,7 @@ class MultiStreamManager:
         self,
         detector_type: str = "mtcnn",
         device: str = "cuda",
+        gpu_id: int = 0,
         batch_size: int = 8,
         max_buffer_size: int = 100,
     ):
@@ -220,14 +221,18 @@ class MultiStreamManager:
         Args:
             detector_type: 检测器类型
             device: 推理设备
+            gpu_id: GPU ID
             batch_size: 批处理大小
             max_buffer_size: 最大缓冲区大小
         """
         self.detector_type = detector_type
         self.device = device if torch.cuda.is_available() else "cpu"
+        self.gpu_id = gpu_id
         self.batch_size = batch_size
 
-        # 初始化检测器
+        if self.device == "cuda" and torch.cuda.is_available():
+            torch.cuda.set_device(gpu_id)
+
         self._init_detector()
 
         # 流管理

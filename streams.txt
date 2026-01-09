@@ -16,9 +16,9 @@
 # dh_entrance, rtsp://admin:password@192.168.1.103:554/cam/realmonitor?channel=1&subtype=0, 5, 10
 
 # 测试流 - 公共演示流
-test_stream_1, rtsp://admin:a1234567@192.168.12.91:554/cam/realmonitor?channel=1&subtype=0, 1, 5
-test_stream_2, rtsp://admin:a1234567@192.168.12.92:554/cam/realmonitor?channel=1&subtype=0, 1, 5
-test_stream_3, rtsp://admin:a1234567@192.168.12.93:554/cam/realmonitor?channel=1&subtype=0, 1, 5
+test_stream_1, rtsp://admin:a1234567@192.168.10.91:554/ch1/main/av_stream, 1, 5
+test_stream_2, rtsp://admin:a1234567@192.168.10.92:554/ch1/main/av_stream, 1, 5
+test_stream_3, rtsp://admin:a1234567@192.168.10.93:554/ch1/main/av_stream, 1, 5
 test_stream_4, rtsp://admin:a1234567@192.168.12.31:554/cam/realmonitor?channel=1&subtype=0, 1, 5
 test_stream_5, rtsp://admin:a1234567@192.168.12.32:554/cam/realmonitor?channel=1&subtype=0, 1, 5
 test_stream_6, rtsp://admin:a1234567@192.168.12.33:554/cam/realmonitor?channel=1&subtype=0, 1, 5

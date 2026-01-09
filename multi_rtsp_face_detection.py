@@ -75,10 +75,11 @@ class MultiStreamApp:
         """创建测试流配置"""
         streams = []
 
-        # 使用公共测试流
+        # 使用公共测试流 (更新为可用的流)
         test_urls = [
-            "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4",
-            # 可以添加更多测试流
+            "https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4",
+            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
         ]
 
         for i in range(num_streams):

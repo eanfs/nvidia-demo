@@ -1,0 +1,9 @@
+# 70 路 RTSP 流配置
+# 格式: stream_id, rtsp_url, priority, target_fps
+
+cam_001, rtsp://admin:a1234567@192.168.10.91:554/cam/realmonitor?channel=1&subtype=0, 5, 5
+cam_002, rtsp://admin:a1234567@192.168.10.92:554/cam/realmonitor?channel=1&subtype=0, 5, 5
+cam_003, rtsp://admin:a1234567@192.168.10.93:554/cam/realmonitor?channel=1&subtype=0, 5, 5
+cam_004, rtsp://admin:a1234567@192.168.10.91:554/cam/realmonitor?channel=1&subtype=0, 3, 5
+cam_005, rtsp://admin:a1234567@192.168.10.92:554/cam/realmonitor?channel=1&subtype=0, 3, 5
+cam_006, rtsp://admin:a1234567@192.168.10.93:554/cam/realmonitor?channel=1&subtype=0, 3, 5
