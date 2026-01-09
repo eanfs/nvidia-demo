@@ -50,13 +50,13 @@
 ## 📋 系统要求
 
 ### 硬件要求
-- NVIDIA GPU (支持 CUDA 11.0+)
+- NVIDIA GPU (支持 CUDA 12.4+)
 - **推荐**: NVIDIA A10 / A30 / A100 / RTX 3090 / RTX 4090
 - 推荐显存：8GB+ (单路) / 16GB+ (多路)
 
 ### 软件要求
 - Python 3.8+
-- CUDA Toolkit 11.0+
+- CUDA Toolkit 12.4+
 - cuDNN 8.0+
 - NVIDIA Video Codec SDK (可选，用于硬件解码)
 
@@ -90,8 +90,8 @@ venv\Scripts\activate
 ```bash
 # 安装 PyTorch (CUDA 版本)
 # 访问 https://pytorch.org/ 获取适合你的 CUDA 版本的安装命令
-# 例如 CUDA 11.8:
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# 例如 CUDA 12.4:
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 
 # 安装其他依赖
 pip install -r requirements.txt

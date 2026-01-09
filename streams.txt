@@ -16,4 +16,9 @@
 # dh_entrance, rtsp://admin:password@192.168.1.103:554/cam/realmonitor?channel=1&subtype=0, 5, 10
 
 # 测试流 - 公共演示流
-test_stream_1, rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4, 1, 5
+test_stream_1, rtsp://admin:a1234567@192.168.12.91:554/cam/realmonitor?channel=1&subtype=0, 1, 5
+test_stream_2, rtsp://admin:a1234567@192.168.12.92:554/cam/realmonitor?channel=1&subtype=0, 1, 5
+test_stream_3, rtsp://admin:a1234567@192.168.12.93:554/cam/realmonitor?channel=1&subtype=0, 1, 5
+test_stream_4, rtsp://admin:a1234567@192.168.12.31:554/cam/realmonitor?channel=1&subtype=0, 1, 5
+test_stream_5, rtsp://admin:a1234567@192.168.12.32:554/cam/realmonitor?channel=1&subtype=0, 1, 5
+test_stream_6, rtsp://admin:a1234567@192.168.12.33:554/cam/realmonitor?channel=1&subtype=0, 1, 5

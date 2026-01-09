@@ -258,7 +258,7 @@ python benchmark.py --streams 70 --duration 300  # 5 分钟测试
 - 网络: 10 Gbps
 
 软件：
-- CUDA: 11.8
+- CUDA: 12.4
 - TensorRT: 8.6.1
 - PyTorch: 2.1.0
 - OpenCV: 4.8.1

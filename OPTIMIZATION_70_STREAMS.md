@@ -207,7 +207,7 @@ torch.cuda.empty_cache()
 | **人脸检测模型** | YOLOv5s-Face | 轻量、快速、精度高 |
 | **推理引擎** | TensorRT 8.5+ | INT8 量化、最优性能 |
 | **视频解码** | FFmpeg + NVDEC | 硬件加速 |
-| **框架** | Python 3.9 + CUDA 11.8 | 兼容性好 |
+| **框架** | Python 3.9 + CUDA 12.4 | 兼容性好 |
 | **批处理** | Dynamic Batching | GPU 利用率最大化 |
 
 ### 可选增强
