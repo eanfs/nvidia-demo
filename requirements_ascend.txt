@@ -1,0 +1,100 @@
+# 华为昇腾 Atlas 300V NPU 加速视频处理和人脸识别依赖
+
+# ============================================
+# 系统要求
+# ============================================
+# - 昇腾 Atlas 300V 推理卡
+# - CANN (Compute Architecture for Neural Networks) 7.0+
+# - 驱动版本: 23.0.0+
+# - Python 3.7-3.9 (CANN 官方支持版本)
+
+# ============================================
+# 基础依赖
+# ============================================
+
+# OpenCV - 图像和视频处理
+opencv-python==4.8.1.78
+opencv-contrib-python==4.8.1.78
+
+# NumPy - 数值计算
+numpy==1.24.3
+
+# 图像处理
+Pillow==10.1.0
+
+# ============================================
+# 昇腾专用包 (需要从华为官方源安装)
+# ============================================
+
+# 注意: 以下包需要从华为官方 Ascend 仓库安装
+# 安装方式:
+#   1. 下载 CANN toolkit: https://www.hiascend.com/software/cann
+#   2. 安装后设置环境变量: source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
+#   3. ACL Python 包会随 CANN 一起安装
+
+# 华为 AI 框架 (可选，用于高级功能)
+# mindspore==2.2.0  # MindSpore 深度学习框架
+
+# ============================================
+# 可选依赖
+# ============================================
+
+# 视频处理 - PyAV
+av==11.0.0
+
+# 进度条
+tqdm==4.66.1
+
+# YAML 配置解析
+PyYAML==6.0.1
+
+# 日志增强
+colorlog==6.7.0
+
+# ============================================
+# 开发/测试依赖
+# ============================================
+
+# 代码格式化
+black==23.11.0
+isort==5.12.0
+
+# 类型检查
+mypy==1.7.0
+
+# 测试
+pytest==7.4.3
+
+# ============================================
+# 安装说明
+# ============================================
+#
+# 1. 安装 CANN Toolkit
+#    - 从 https://www.hiascend.com/software/cann 下载
+#    - 运行安装脚本: ./Ascend-cann-toolkit_xxx_linux-xxx.run --install
+#
+# 2. 配置环境变量
+#    source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
+#
+# 3. 安装 Python 依赖
+#    pip install -r requirements_ascend.txt
+#
+# 4. 验证安装
+#    python -c "import acl; print('ACL 版本:', acl.__version__)"
+#    npu-smi info
+#
+# ============================================
+# 模型转换
+# ============================================
+#
+# 将 ONNX 模型转换为 .om 格式:
+#
+#   atc --framework=5 \
+#       --model=face_detection.onnx \
+#       --output=face_detection \
+#       --input_format=NCHW \
+#       --input_shape="input:1,3,640,640" \
+#       --soc_version=Ascend310P \
+#       --log=error
+#
+# ============================================

@@ -1,3 +1,16 @@
+# 多路 RTSP 流人脸检测系统
+
+## 🎯 支持平台
+
+本项目同时支持 **NVIDIA GPU** 和 **华为昇腾 NPU** 两种硬件平台：
+
+| 平台 | 硬件 | 推荐场景 | 文档 |
+|------|------|----------|------|
+| **NVIDIA** | A10/A30/A100/RTX | 通用高性能场景 | 本文档 |
+| **华为昇腾** | Atlas 300V | 国产化/高视频解析场景 | [昇腾迁移指南](docs/ASCEND_MIGRATION_GUIDE.md) |
+
+---
+
 # NVIDIA A10 GPU 多路 RTSP 流人脸检测性能评估
 
 ## 📊 性能预估总结
@@ -257,16 +270,31 @@ python multi_rtsp_face_detection.py --target-fps 3
 
 ```
 nvidia-demo/
-├── A10_PERFORMANCE_ANALYSIS.md      # A10 GPU 性能分析报告
-├── rtsp_face_detection.py           # 单路流处理主程序
-├── multi_rtsp_face_detection.py     # 多路流处理主程序
-├── multi_stream_manager.py          # 多路流管理器
-├── face_detector.py                 # 人脸检测器封装
-├── performance_monitor.py           # 性能监控工具
+├── docs/
+│   ├── ASCEND_MIGRATION_GUIDE.md    # 昇腾迁移指南
+│   └── ...                          # 其他文档
+│
+├── 🟢 NVIDIA GPU 版本
+│   ├── rtsp_face_detection.py           # 单路流处理主程序
+│   ├── multi_rtsp_face_detection.py     # 多路流处理主程序
+│   ├── multi_stream_manager.py          # 多路流管理器
+│   ├── face_detector.py                 # 人脸检测器封装
+│   ├── tensorrt_face_detector.py        # TensorRT 加速检测器
+│   ├── performance_monitor.py           # GPU 性能监控工具
+│   ├── config.py                        # NVIDIA 配置文件
+│   └── requirements.txt                 # NVIDIA 依赖列表
+│
+├── 🔵 华为昇腾版本
+│   ├── multi_rtsp_face_detection_ascend.py  # 昇腾版主程序
+│   ├── ascend_stream_manager.py         # 昇腾多流管理器 (DVPP)
+│   ├── ascend_face_detector.py          # ACL 人脸检测器
+│   ├── ascend_performance_monitor.py    # NPU 性能监控
+│   ├── ascend_model_converter.py        # 模型转换工具 (ATC)
+│   ├── config_ascend.py                 # 昇腾配置文件
+│   └── requirements_ascend.txt          # 昇腾依赖列表
+│
 ├── benchmark.py                     # 基准测试脚本
-├── config.py                        # 配置文件
 ├── streams.txt                      # 流配置示例
-├── requirements.txt                 # 依赖列表
 └── README.md                        # 说明文档
 ```
 
@@ -358,9 +386,51 @@ MIT License
 
 ## 📚 参考资源
 
+### NVIDIA
 - [NVIDIA Video Codec SDK](https://developer.nvidia.com/nvidia-video-codec-sdk)
 - [NVIDIA A10 GPU 规格](https://www.nvidia.com/en-us/data-center/products/a10-gpu/)
 - [PyTorch CUDA](https://pytorch.org/get-started/locally/)
 - [TensorRT](https://developer.nvidia.com/tensorrt)
 - [InsightFace](https://github.com/deepinsight/insightface)
 - [MTCNN](https://github.com/ipazc/mtcnn)
+
+### 华为昇腾
+- [华为昇腾官网](https://www.hiascend.com/)
+- [CANN 开发文档](https://www.hiascend.com/document)
+- [昇腾社区](https://www.hiascend.com/forum)
+- [GitHub 示例](https://github.com/Ascend/samples)
+
+---
+
+## 🔵 华为昇腾 Atlas 300V 快速开始
+
+### 昇腾版性能参考
+
+| 优化级别 | 1080p 流数 | 720p 流数 | 视频解码能力 |
+|---------|-----------|----------|-------------|
+| **FP32** | 15-20 路 | 30-40 路 | 100 路 1080p |
+| **FP16** | 30-40 路 | 60-80 路 | 100 路 1080p |
+| **INT8** | 50-70 路 | 100-140 路 | 100 路 1080p |
+
+### 快速使用
+
+```bash
+# 1. 安装 CANN
+source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
+
+# 2. 安装依赖
+pip install -r requirements_ascend.txt
+
+# 3. 转换模型
+python ascend_model_converter.py convert \
+    --model face_detection.onnx \
+    --output models/face_detection \
+    --soc Ascend310P
+
+# 4. 运行
+python multi_rtsp_face_detection_ascend.py \
+    --config-file streams.txt \
+    --model models/face_detection.om
+```
+
+详细信息请参考: [昇腾迁移指南](docs/ASCEND_MIGRATION_GUIDE.md)
