@@ -6,6 +6,7 @@
 import cv2
 import numpy as np
 import logging
+import threading
 from typing import List, Tuple, Optional
 from pathlib import Path
 
@@ -51,6 +52,9 @@ class ACLFaceDetector:
         self.input_dataset = None
         self.output_dataset = None
 
+        # 线程锁 (保护 ACL 推理操作)
+        self._inference_lock = threading.Lock()
+
         # 初始化 ACL
         self._init_acl()
 
@@ -58,6 +62,9 @@ class ACLFaceDetector:
 
     def _init_acl(self):
         """初始化 ACL 运行时环境"""
+        acl_initialized = False
+        device_set = False
+
         try:
             import acl
 
@@ -67,31 +74,51 @@ class ACLFaceDetector:
             ret = acl.init()
             if ret != 0:
                 raise RuntimeError(f"ACL 初始化失败，错误码: {ret}")
+            acl_initialized = True
 
             # 设置设备
             ret = acl.rt.set_device(self.device_id)
             if ret != 0:
                 raise RuntimeError(f"设置设备失败，错误码: {ret}")
+            device_set = True
 
-            # 创建 context
-            self.context, ret = acl.rt.create_context(self.device_id)
-            if ret != 0:
-                raise RuntimeError(f"创建 context 失败，错误码: {ret}")
+            try:
+                # 创建 context
+                self.context, ret = acl.rt.create_context(self.device_id)
+                if ret != 0:
+                    raise RuntimeError(f"创建 context 失败，错误码: {ret}")
 
-            # 创建 stream
-            self.stream, ret = acl.rt.create_stream()
-            if ret != 0:
-                raise RuntimeError(f"创建 stream 失败，错误码: {ret}")
+                try:
+                    # 创建 stream
+                    self.stream, ret = acl.rt.create_stream()
+                    if ret != 0:
+                        raise RuntimeError(f"创建 stream 失败，错误码: {ret}")
 
-            # 加载模型
-            self._load_model()
+                    # 加载模型
+                    self._load_model()
 
-            logger.info("ACL 运行时环境初始化成功")
+                    logger.info("ACL 运行时环境初始化成功")
+
+                except Exception:
+                    # 清理 context
+                    if self.context:
+                        acl.rt.destroy_context(self.context)
+                        self.context = None
+                    raise
+
+            except Exception:
+                # 清理设备
+                if device_set:
+                    acl.rt.reset_device(self.device_id)
+                raise
 
         except ImportError:
             logger.error("未安装 ACL Python 包，请确保已安装 CANN toolkit")
             raise
         except Exception as e:
+            # 清理 ACL
+            if acl_initialized:
+                acl.finalize()
             logger.error(f"ACL 初始化失败: {e}")
             raise
 
@@ -122,25 +149,49 @@ class ACLFaceDetector:
         self.input_dataset = self.acl.mdl.create_dataset()
         self.input_buffers = []
 
-        for i in range(input_num):
-            input_size = self.acl.mdl.get_input_size_by_index(self.model_desc, i)
+        try:
+            for i in range(input_num):
+                input_size = self.acl.mdl.get_input_size_by_index(self.model_desc, i)
 
-            # 分配设备内存
-            buffer_dev, ret = self.acl.rt.malloc(input_size, 0)
-            if ret != 0:
-                raise RuntimeError(f"分配输入内存失败，错误码: {ret}")
+                # 分配设备内存
+                buffer_dev, ret = self.acl.rt.malloc(input_size, 0)
+                if ret != 0:
+                    raise RuntimeError(f"分配输入内存失败，错误码: {ret}")
 
-            # 创建数据缓冲区
-            data_buffer = self.acl.create_data_buffer(buffer_dev, input_size)
+                try:
+                    # 创建数据缓冲区
+                    data_buffer = self.acl.create_data_buffer(buffer_dev, input_size)
 
-            # 添加到数据集
-            ret = self.acl.mdl.add_dataset_buffer(self.input_dataset, data_buffer)
-            if ret != 0:
-                raise RuntimeError(f"添加输入缓冲区失败，错误码: {ret}")
+                    # 添加到数据集
+                    ret = self.acl.mdl.add_dataset_buffer(
+                        self.input_dataset, data_buffer
+                    )
+                    if ret != 0:
+                        self.acl.destroy_data_buffer(data_buffer)
+                        raise RuntimeError(f"添加输入缓冲区失败，错误码: {ret}")
 
-            self.input_buffers.append(
-                {"buffer": buffer_dev, "size": input_size, "data_buffer": data_buffer}
-            )
+                    self.input_buffers.append(
+                        {
+                            "buffer": buffer_dev,
+                            "size": input_size,
+                            "data_buffer": data_buffer,
+                        }
+                    )
+                except Exception:
+                    # 释放刚分配的设备内存
+                    self.acl.rt.free(buffer_dev)
+                    raise
+
+        except Exception:
+            # 清理已创建的缓冲区
+            for buf in self.input_buffers:
+                self.acl.rt.free(buf["buffer"])
+                self.acl.destroy_data_buffer(buf["data_buffer"])
+            self.input_buffers = []
+            if self.input_dataset:
+                self.acl.mdl.destroy_dataset(self.input_dataset)
+                self.input_dataset = None
+            raise
 
     def _create_output_dataset(self):
         """创建输出数据集"""
@@ -148,25 +199,49 @@ class ACLFaceDetector:
         self.output_dataset = self.acl.mdl.create_dataset()
         self.output_buffers = []
 
-        for i in range(output_num):
-            output_size = self.acl.mdl.get_output_size_by_index(self.model_desc, i)
+        try:
+            for i in range(output_num):
+                output_size = self.acl.mdl.get_output_size_by_index(self.model_desc, i)
 
-            # 分配设备内存
-            buffer_dev, ret = self.acl.rt.malloc(output_size, 0)
-            if ret != 0:
-                raise RuntimeError(f"分配输出内存失败，错误码: {ret}")
+                # 分配设备内存
+                buffer_dev, ret = self.acl.rt.malloc(output_size, 0)
+                if ret != 0:
+                    raise RuntimeError(f"分配输出内存失败，错误码: {ret}")
 
-            # 创建数据缓冲区
-            data_buffer = self.acl.create_data_buffer(buffer_dev, output_size)
+                try:
+                    # 创建数据缓冲区
+                    data_buffer = self.acl.create_data_buffer(buffer_dev, output_size)
 
-            # 添加到数据集
-            ret = self.acl.mdl.add_dataset_buffer(self.output_dataset, data_buffer)
-            if ret != 0:
-                raise RuntimeError(f"添加输出缓冲区失败，错误码: {ret}")
+                    # 添加到数据集
+                    ret = self.acl.mdl.add_dataset_buffer(
+                        self.output_dataset, data_buffer
+                    )
+                    if ret != 0:
+                        self.acl.destroy_data_buffer(data_buffer)
+                        raise RuntimeError(f"添加输出缓冲区失败，错误码: {ret}")
 
-            self.output_buffers.append(
-                {"buffer": buffer_dev, "size": output_size, "data_buffer": data_buffer}
-            )
+                    self.output_buffers.append(
+                        {
+                            "buffer": buffer_dev,
+                            "size": output_size,
+                            "data_buffer": data_buffer,
+                        }
+                    )
+                except Exception:
+                    # 释放刚分配的设备内存
+                    self.acl.rt.free(buffer_dev)
+                    raise
+
+        except Exception:
+            # 清理已创建的缓冲区
+            for buf in self.output_buffers:
+                self.acl.rt.free(buf["buffer"])
+                self.acl.destroy_data_buffer(buf["data_buffer"])
+            self.output_buffers = []
+            if self.output_dataset:
+                self.acl.mdl.destroy_dataset(self.output_dataset)
+                self.output_dataset = None
+            raise
 
     def preprocess(self, images: List[np.ndarray]) -> np.ndarray:
         """
@@ -207,52 +282,54 @@ class ACLFaceDetector:
         Returns:
             检测结果列表
         """
-        # 拷贝输入数据到设备
-        input_data = np.ascontiguousarray(batch)
-        input_ptr = self.acl.util.numpy_to_ptr(input_data)
-        input_size = input_data.size * input_data.itemsize
-
-        ret = self.acl.rt.memcpy(
-            self.input_buffers[0]["buffer"],
-            self.input_buffers[0]["size"],
-            input_ptr,
-            input_size,
-            1,  # ACL_MEMCPY_HOST_TO_DEVICE
-        )
-        if ret != 0:
-            raise RuntimeError(f"拷贝输入数据失败，错误码: {ret}")
-
-        # 执行推理
-        ret = self.acl.mdl.execute(
-            self.model_id, self.input_dataset, self.output_dataset
-        )
-        if ret != 0:
-            raise RuntimeError(f"推理执行失败，错误码: {ret}")
-
-        # 拷贝输出数据到主机
-        outputs = []
-        for i, out_buf in enumerate(self.output_buffers):
-            # 获取输出形状信息
-            output_dims = self.acl.mdl.get_output_dims(self.model_desc, i)
-            output_shape = [dim for dim in output_dims[0]["dims"] if dim != 0]
-
-            # 分配主机内存
-            output_data = np.zeros(output_shape, dtype=np.float32)
-            output_ptr = self.acl.util.numpy_to_ptr(output_data)
+        # 使用线程锁保护 ACL 推理操作（ACL Context 非线程安全）
+        with self._inference_lock:
+            # 拷贝输入数据到设备
+            input_data = np.ascontiguousarray(batch)
+            input_ptr = self.acl.util.numpy_to_ptr(input_data)
+            input_size = input_data.size * input_data.itemsize
 
             ret = self.acl.rt.memcpy(
-                output_ptr,
-                output_data.nbytes,
-                out_buf["buffer"],
-                out_buf["size"],
-                2,  # ACL_MEMCPY_DEVICE_TO_HOST
+                self.input_buffers[0]["buffer"],
+                self.input_buffers[0]["size"],
+                input_ptr,
+                input_size,
+                1,  # ACL_MEMCPY_HOST_TO_DEVICE
             )
             if ret != 0:
-                raise RuntimeError(f"拷贝输出数据失败，错误码: {ret}")
+                raise RuntimeError(f"拷贝输入数据失败，错误码: {ret}")
 
-            outputs.append(output_data)
+            # 执行推理
+            ret = self.acl.mdl.execute(
+                self.model_id, self.input_dataset, self.output_dataset
+            )
+            if ret != 0:
+                raise RuntimeError(f"推理执行失败，错误码: {ret}")
 
-        return outputs
+            # 拷贝输出数据到主机
+            outputs = []
+            for i, out_buf in enumerate(self.output_buffers):
+                # 获取输出形状信息
+                output_dims = self.acl.mdl.get_output_dims(self.model_desc, i)
+                output_shape = [dim for dim in output_dims[0]["dims"] if dim != 0]
+
+                # 分配主机内存
+                output_data = np.zeros(output_shape, dtype=np.float32)
+                output_ptr = self.acl.util.numpy_to_ptr(output_data)
+
+                ret = self.acl.rt.memcpy(
+                    output_ptr,
+                    output_data.nbytes,
+                    out_buf["buffer"],
+                    out_buf["size"],
+                    2,  # ACL_MEMCPY_DEVICE_TO_HOST
+                )
+                if ret != 0:
+                    raise RuntimeError(f"拷贝输出数据失败，错误码: {ret}")
+
+                outputs.append(output_data)
+
+            return outputs
 
     def postprocess(
         self, outputs: List[np.ndarray], orig_shapes: List[Tuple[int, int]]
@@ -268,6 +345,9 @@ class ACLFaceDetector:
             检测框列表 [[(x1, y1, x2, y2, conf), ...], ...]
         """
         # 解析输出 (假设 YOLO 格式输出)
+        if not outputs or len(outputs) == 0:
+            return [[] for _ in orig_shapes]
+
         detections = outputs[0]
 
         results = []
@@ -276,17 +356,27 @@ class ACLFaceDetector:
         for i, (orig_h, orig_w) in enumerate(orig_shapes):
             if len(detections.shape) == 3:
                 # [batch, num_dets, 6]
+                if i >= detections.shape[0]:
+                    results.append([])
+                    continue
                 batch_dets = detections[i]
             else:
-                # [num_dets, 6]
-                dets_per_image = len(detections) // batch_size
-                batch_dets = detections[i * dets_per_image : (i + 1) * dets_per_image]
+                # [num_dets, 6] - 使用 array_split 安全分割
+                batch_dets_list = np.array_split(detections, batch_size)
+                if i < len(batch_dets_list):
+                    batch_dets = batch_dets_list[i]
+                else:
+                    batch_dets = np.array([])
 
-            # 过滤低置信度检测
-            if len(batch_dets) > 0:
-                conf_idx = 4 if batch_dets.shape[-1] >= 5 else -1
-                mask = batch_dets[:, conf_idx] > self.conf_threshold
-                batch_dets = batch_dets[mask]
+            # 过滤低置信度检测 (增加维度检查)
+            if len(batch_dets) > 0 and batch_dets.ndim == 2:
+                if batch_dets.shape[-1] >= 5:
+                    conf_idx = 4
+                    mask = batch_dets[:, conf_idx] > self.conf_threshold
+                    batch_dets = batch_dets[mask]
+                else:
+                    logger.warning(f"检测输出维度异常: {batch_dets.shape}，跳过此batch")
+                    batch_dets = np.array([])
 
             if len(batch_dets) == 0:
                 results.append([])
@@ -319,35 +409,19 @@ class ACLFaceDetector:
     def _nms(
         self, boxes: np.ndarray, scores: np.ndarray, threshold: float
     ) -> List[int]:
-        """Non-Maximum Suppression"""
-        x1 = boxes[:, 0]
-        y1 = boxes[:, 1]
-        x2 = boxes[:, 2]
-        y2 = boxes[:, 3]
+        """Non-Maximum Suppression using OpenCV (优化性能)"""
+        # 转换为 OpenCV 格式
+        boxes_list = boxes.tolist()
+        scores_list = scores.tolist()
 
-        areas = (x2 - x1) * (y2 - y1)
-        order = scores.argsort()[::-1]
+        # 使用 OpenCV 的 NMS 实现 (比手写实现快很多)
+        indices = cv2.dnn.NMSBoxes(boxes_list, scores_list, 0.0, threshold)
 
-        keep = []
-        while order.size > 0:
-            i = order[0]
-            keep.append(i)
-
-            xx1 = np.maximum(x1[i], x1[order[1:]])
-            yy1 = np.maximum(y1[i], y1[order[1:]])
-            xx2 = np.minimum(x2[i], x2[order[1:]])
-            yy2 = np.minimum(y2[i], y2[order[1:]])
-
-            w = np.maximum(0.0, xx2 - xx1)
-            h = np.maximum(0.0, yy2 - yy1)
-            inter = w * h
-
-            iou = inter / (areas[i] + areas[order[1:]] - inter)
-
-            inds = np.where(iou <= threshold)[0]
-            order = order[inds + 1]
-
-        return keep
+        # 返回索引列表
+        if len(indices) > 0:
+            return indices.flatten().tolist()
+        else:
+            return []
 
     def detect_faces(
         self, frame: np.ndarray

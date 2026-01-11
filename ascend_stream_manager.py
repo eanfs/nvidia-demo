@@ -161,6 +161,11 @@ class DVPPDecoder:
         if not self.initialized:
             return None
 
+        input_buffer = None
+        output_buffer = None
+        input_pic_desc = None
+        output_pic_desc = None
+
         try:
             # 分配设备内存
             input_size = len(frame_data)
@@ -172,7 +177,6 @@ class DVPPDecoder:
             input_ptr = self.acl.util.bytes_to_ptr(frame_data)
             ret = self.acl.rt.memcpy(input_buffer, input_size, input_ptr, input_size, 1)
             if ret != 0:
-                self.acl.rt.free(input_buffer)
                 return None
 
             # 创建输入图片描述
@@ -184,7 +188,6 @@ class DVPPDecoder:
             output_size = 1920 * 1080 * 3 // 2  # 假设最大 1080p
             output_buffer, ret = self.acl.rt.malloc(output_size, 0)
             if ret != 0:
-                self.acl.rt.free(input_buffer)
                 return None
 
             # 创建输出图片描述
@@ -212,12 +215,6 @@ class DVPPDecoder:
                 output_ptr, actual_size, output_buffer, actual_size, 2
             )
 
-            # 释放资源
-            self.acl.rt.free(input_buffer)
-            self.acl.rt.free(output_buffer)
-            self.acl.media.dvpp_destroy_pic_desc(input_pic_desc)
-            self.acl.media.dvpp_destroy_pic_desc(output_pic_desc)
-
             # YUV420SP 转 BGR
             yuv = output_host.reshape((height * 3 // 2, width))
             bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_NV12)
@@ -227,6 +224,17 @@ class DVPPDecoder:
         except Exception as e:
             logger.error(f"DVPP 解码失败: {e}")
             return None
+
+        finally:
+            # 确保资源释放
+            if input_buffer:
+                self.acl.rt.free(input_buffer)
+            if output_buffer:
+                self.acl.rt.free(output_buffer)
+            if input_pic_desc:
+                self.acl.media.dvpp_destroy_pic_desc(input_pic_desc)
+            if output_pic_desc:
+                self.acl.media.dvpp_destroy_pic_desc(output_pic_desc)
 
     def release(self):
         """释放资源"""
