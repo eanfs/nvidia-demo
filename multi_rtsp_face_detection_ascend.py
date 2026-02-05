@@ -1,6 +1,6 @@
 """
-多路 RTSP 流人脸检测主程序
-支持同时处理多路视频流
+昇腾版多路 RTSP 流人脸检测主程序
+基于华为 Atlas 300V NPU 进行硬件加速
 """
 
 import argparse
@@ -9,7 +9,7 @@ import signal
 import sys
 import logging
 from typing import List
-from multi_stream_manager import MultiStreamManager, StreamConfig
+from ascend_stream_manager import AscendMultiStreamManager, StreamConfig
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -17,8 +17,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class MultiStreamApp:
-    """多路流应用"""
+class AscendMultiStreamApp:
+    """昇腾多路流应用"""
 
     def __init__(self):
         self.manager = None
@@ -70,14 +70,15 @@ class MultiStreamApp:
             logger.error(f"加载流配置文件失败: {e}")
             return []
 
-    def start(self, config_file: str, detector_type: str = "mtcnn", device: str = "cuda", batch_size: int = 8, buffer_size: int = 100, report_interval: int = 10):
+    def start(self, config_file: str, model_path: str = None, device_id: int = 0, batch_size: int = 8, buffer_size: int = 100, use_dvpp: bool = True, report_interval: int = 10):
         """启动应用"""
-        # 创建多路流管理器
-        self.manager = MultiStreamManager(
-            detector_type=detector_type,
-            device=device,
+        # 创建昇腾多路流管理器
+        self.manager = AscendMultiStreamManager(
+            model_path=model_path,
+            device_id=device_id,
             batch_size=batch_size,
             max_buffer_size=buffer_size,
+            use_dvpp=use_dvpp,
         )
 
         # 从配置文件加载流配置
@@ -95,7 +96,7 @@ class MultiStreamApp:
         self.manager.start()
         self.running = True
 
-        logger.info(f"已启动 {len(streams)} 路流处理")
+        logger.info(f"已启动 {len(streams)} 路流处理 (昇腾 Atlas 300V)")
 
         # 性能监控循环
         try:
@@ -131,37 +132,30 @@ class MultiStreamApp:
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(
-        description="多路 RTSP 流人脸检测 (NVIDIA GPU 加速)",
+        description="昇腾版多路 RTSP 流人脸检测 (Atlas 300V NPU 加速)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
 
   # 从配置文件加载流
-  python multi_rtsp_face_detection.py streams.txt
+  python multi_rtsp_face_detection_ascend.py streams.txt --model models/face.om
 
 配置文件格式 (streams.txt):
   # stream_id, rtsp_url, priority, target_fps
   cam1, rtsp://192.168.1.100:554/stream1, 1, 5
   cam2, rtsp://192.168.1.101:554/stream1, 2, 10
   cam3, rtsp://192.168.1.102:554/stream1, 1, 5
+
+昇腾 Atlas 300V 性能参考:
+  - FP16 模式: 30-40 路 1080p @ 5fps
+  - INT8 模式: 50-70 路 1080p @ 5fps
+  - DVPP 硬件解码: 最高 100 路 1080p @ 25fps
         """,
     )
 
     parser.add_argument("config_file", type=str, help="流配置文件路径")
-    parser.add_argument(
-        "--detector",
-        type=str,
-        default="mtcnn",
-        choices=["mtcnn", "opencv", "insightface"],
-        help="人脸检测器类型（默认: mtcnn）",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda",
-        choices=["cuda", "cpu"],
-        help="推理设备（默认: cuda）",
-    )
+    parser.add_argument("--model", type=str, default=None, help=".om 离线模型路径")
+    parser.add_argument("--device", type=int, default=0, help="NPU 设备 ID（默认: 0）")
     parser.add_argument(
         "--batch-size", type=int, default=8, help="批处理大小（默认: 8）"
     )
@@ -171,17 +165,40 @@ def main():
     parser.add_argument(
         "--report-interval", type=int, default=10, help="性能报告间隔（秒）（默认: 10）"
     )
+    parser.add_argument(
+        "--use-dvpp",
+        action="store_true",
+        default=True,
+        help="使用 DVPP 硬件解码（默认: 启用）",
+    )
+    parser.add_argument(
+        "--no-dvpp",
+        action="store_false",
+        dest="use_dvpp",
+        help="禁用 DVPP 硬件解码",
+    )
 
     args = parser.parse_args()
 
+    # 打印配置信息
+    print("=" * 60)
+    print("昇腾 Atlas 300V 多路 RTSP 流人脸检测系统")
+    print("=" * 60)
+    print(f"NPU 设备:     {args.device}")
+    print(f"模型路径:     {args.model or '(使用 OpenCV 后端)'}")
+    print(f"批处理大小:   {args.batch_size}")
+    print(f"DVPP 解码:    {'启用' if args.use_dvpp else '禁用'}")
+    print("=" * 60)
+
     # 创建并启动应用
-    app = MultiStreamApp()
+    app = AscendMultiStreamApp()
     app.start(
         config_file=args.config_file,
-        detector_type=args.detector,
-        device=args.device,
+        model_path=args.model,
+        device_id=args.device,
         batch_size=args.batch_size,
         buffer_size=args.buffer_size,
+        use_dvpp=args.use_dvpp,
         report_interval=args.report_interval,
     )
 
